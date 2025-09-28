@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useMemo } from 'react';
 import { IfcHeaderDescription } from './types';
 import { parseIfcHeaderDescriptions, updateIfcHeaderDescriptions } from './services/ifcService';
@@ -12,7 +11,7 @@ const App: React.FC = () => {
   const [fileName, setFileName] = useState<string | null>(null);
   const [originalContent, setOriginalContent] = useState<string | null>(null);
   const [descriptions, setDescriptions] = useState<IfcHeaderDescription[]>([]);
-  const [editedValues, setEditedValues] = useState<Map<number, string>>(new Map());
+  const [initialDescriptions, setInitialDescriptions] = useState<IfcHeaderDescription[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,7 +30,7 @@ const App: React.FC = () => {
         setOriginalContent(content);
         const parsedDescriptions = parseIfcHeaderDescriptions(content);
         setDescriptions(parsedDescriptions);
-        setEditedValues(new Map());
+        setInitialDescriptions(parsedDescriptions);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'An unknown error occurred during parsing.');
         resetState();
@@ -47,24 +46,30 @@ const App: React.FC = () => {
   }, []);
 
   const handleDescriptionChange = useCallback((index: number, newValue: string) => {
-    setEditedValues(prev => {
-      const newMap = new Map(prev);
-      const originalDescription = descriptions.find(d => d.index === index);
-      // Only store the change if it's different from the original value
-      if (originalDescription && originalDescription.value !== newValue) {
-        newMap.set(index, newValue);
-      } else {
-        newMap.delete(index); // If changed back to original, remove from edits
-      }
-      return newMap;
+    setDescriptions(prev =>
+      prev.map(desc => (desc.index === index ? { ...desc, value: newValue } : desc))
+    );
+  }, []);
+
+  const handleDescriptionDelete = useCallback((indexToDelete: number) => {
+    setDescriptions(prev => prev.filter(desc => desc.index !== indexToDelete));
+  }, []);
+
+  const handleAddNewDescription = () => {
+    setDescriptions(prev => {
+      const newIndex = prev.length > 0 ? Math.max(...prev.map(d => d.index)) + 1 : 0;
+      return [
+        ...prev,
+        { index: newIndex, value: '' }
+      ];
     });
-  }, [descriptions]);
+  };
 
   const handleDownload = useCallback(() => {
-    if (!originalContent || editedValues.size === 0) return;
+    if (!originalContent) return;
 
     try {
-        const updatedContent = updateIfcHeaderDescriptions(originalContent, editedValues);
+        const updatedContent = updateIfcHeaderDescriptions(originalContent, descriptions);
         const blob = new Blob([updatedContent], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -78,18 +83,21 @@ const App: React.FC = () => {
     } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to generate the updated file.');
     }
-  }, [originalContent, editedValues, fileName]);
+  }, [originalContent, descriptions, fileName]);
 
   const resetState = () => {
     setFileName(null);
     setOriginalContent(null);
     setDescriptions([]);
-    setEditedValues(new Map());
+    setInitialDescriptions([]);
     setError(null);
     setIsLoading(false);
   }
 
-  const isDownloadDisabled = useMemo(() => editedValues.size === 0, [editedValues]);
+  const isDownloadDisabled = useMemo(() => {
+    return JSON.stringify(descriptions.map(({index, value}) => ({index, value})).sort((a, b) => a.index - b.index)) === 
+           JSON.stringify(initialDescriptions.map(({index, value}) => ({index, value})).sort((a, b) => a.index - b.index));
+  }, [descriptions, initialDescriptions]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-between p-4 sm:p-6 lg:p-8 font-sans">
@@ -116,13 +124,26 @@ const App: React.FC = () => {
               </div>
               {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-lg mb-4">{error}</div>}
               {descriptions.length > 0 ? (
-                <PropertyEditor 
-                  properties={descriptions} 
-                  onPropertyChange={handleDescriptionChange} 
-                />
+                <>
+                  <PropertyEditor 
+                    properties={descriptions} 
+                    onPropertyChange={handleDescriptionChange}
+                    onPropertyDelete={handleDescriptionDelete}
+                  />
+                  <div className="flex justify-end mt-4">
+                    <Button onClick={handleAddNewDescription} variant="secondary">
+                      Add New Value
+                    </Button>
+                  </div>
+                </>
               ) : (
                 <div className="text-center py-10 px-6 bg-slate-800 rounded-lg">
                     <p className="text-lg text-slate-400">No 'Description' entries were found in the file header.</p>
+                     <div className="mt-4">
+                        <Button onClick={handleAddNewDescription} variant="secondary">
+                         Add First Description
+                        </Button>
+                    </div>
                 </div>
               )}
             </div>

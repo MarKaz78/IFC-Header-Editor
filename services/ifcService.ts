@@ -49,15 +49,13 @@ export const parseIfcHeaderDescriptions = (fileContent: string): IfcHeaderDescri
 };
 
 /**
- * Updates the IFC file content with new header description values.
- * Multi-line input in a textarea is converted into multiple separate description entries.
+ * Updates the IFC file content with a new set of header description values.
+ * Multi-line input is converted into multiple separate description entries.
  * @param originalContent The original raw string content of the IFC file.
- * @param updates A map where the key is the description's index and the value is the new description string.
+ * @param allDescriptions The complete list of IfcHeaderDescription objects to write to the file.
  * @returns The updated IFC file content as a string.
  */
-export const updateIfcHeaderDescriptions = (originalContent: string, updates: Map<number, string>): string => {
-  const originalDescriptions = parseIfcHeaderDescriptions(originalContent);
-
+export const updateIfcHeaderDescriptions = (originalContent: string, allDescriptions: IfcHeaderDescription[]): string => {
   // This more robust regex captures the parts around the description list,
   // so we can replace the list itself without breaking the rest of the statement.
   // Group 1: The prefix, e.g., "FILE_DESCRIPTION("
@@ -71,31 +69,26 @@ export const updateIfcHeaderDescriptions = (originalContent: string, updates: Ma
     return originalContent;
   }
   
-  // Build the new, flattened list of description strings.
+  // Build the new, flattened list of description strings from the provided array.
   const finalValues: string[] = [];
-  originalDescriptions.forEach(desc => {
-    const updatedValue = updates.get(desc.index);
-    if (updatedValue !== undefined) {
-      // If there's an update, split it by newlines and add each line as a separate entry.
-      // Filter out empty strings that result from multiple newlines or trailing newlines.
-      const newLines = updatedValue.split(/\r?\n/).filter(line => line.length > 0);
-      if (newLines.length > 0) {
-        finalValues.push(...newLines);
-      }
+  allDescriptions.forEach(desc => {
+    // If there's an update, split it by newlines and add each line as a separate entry.
+    // Filter out empty strings that might result from multiple newlines.
+    const newLines = desc.value.split(/\r?\n/);
+    if (newLines.length > 1) {
+       finalValues.push(...newLines.filter(line => line.length > 0));
     } else {
-      // Otherwise, add the original value.
-      finalValues.push(desc.value);
+       finalValues.push(desc.value);
     }
   });
 
   // Escape special characters for IFC format: \ -> \\, ' -> ''
-  // Newlines are no longer converted to \N\, but are used to create new entries.
   const escapedValues = finalValues.map(v =>
     `'${v.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`
   );
 
   const newDescriptionsListContent = escapedValues.join(',');
-  const newDescriptionsList = `(${newDescriptionsListContent})`;
+  const newDescriptionsList = `(${newDescriptionsListContent || "''"})`; // Ensure list is not empty `()`
 
   const updatedContent = originalContent.replace(
     replaceRegex,
