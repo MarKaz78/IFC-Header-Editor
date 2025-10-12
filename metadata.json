@@ -1,5 +1,5 @@
 {
   "name": "IFC Description Editor",
-  "description": "A web application to upload an IFC file, view all 'Description' properties, edit their values, and download the modified file. This tool provides a simple interface for quick updates to IFC metadata without needing complex BIM software.",
+  "description": "A web application to upload IFC files, view and edit 'Description' properties, and download the modified file. This tool provides a simple interface for quickly updating IFC metadata without the need for complex BIM software.",
   "requestFramePermissions": []
 }
